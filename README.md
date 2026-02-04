@@ -1,15 +1,25 @@
 # tmm
 
-To install dependencies:
+Minimal tmux session manager. Fuzzy-find sessions to attach, create new ones, or bulk remove.
+
+## Install
 
 ```bash
 bun install
+bun link
 ```
 
-To run:
+## Usage
 
-```bash
-bun run index.ts
+```
+tmm                  # Select and attach to a session (fzf)
+tmm new <name>       # Create a new session
+tmm remove           # Select sessions to remove (multiselect)
+tmm help             # Show help
 ```
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Requirements
+
+- [bun](https://bun.sh)
+- [tmux](https://github.com/tmux/tmux)
+- [fzf](https://github.com/junegunn/fzf)
