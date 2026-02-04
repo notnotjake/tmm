@@ -4,9 +4,9 @@ import * as p from "@clack/prompts";
 import kleur from "kleur";
 
 const styles = {
-  title: kleur.bold().cyan,
+  title: kleur.bold().blue,
   muted: kleur.dim,
-  label: kleur.green,
+  label: kleur.bold().blue,
 };
 
 function formatDate(timestamp: number): string {
@@ -36,12 +36,18 @@ async function getSessions(): Promise<{ name: string; label: string }[]> {
 }
 
 function printHelp() {
+  const pad = 20;
+  const row = (cmd: string, styledCmd: string, desc: string) => {
+    const padding = " ".repeat(pad - cmd.length);
+    console.log(`  ${styledCmd}${padding}${desc}`);
+  };
   console.log(`${styles.title("tmm")} ${styles.muted("- tmux session manager")}`);
   console.log("");
-  console.log(`  ${styles.label("tmm")}                    Select and attach to a session`);
-  console.log(`  ${styles.label("tmm")} new ${styles.muted("<name>")}        Create a new session`);
-  console.log(`  ${styles.label("tmm")} remove              Select sessions to remove`);
-  console.log(`  ${styles.label("tmm")} help                Show this help`);
+  row("tmm", styles.label("tmm"), "Select and attach to a session");
+  row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create a new session");
+  row("tmm remove", `${styles.label("tmm")} remove`, "Select sessions to remove");
+  row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
+  row("tmm help", `${styles.label("tmm")} help`, "Show this help");
 }
 
 const args = process.argv.slice(2);
@@ -60,6 +66,16 @@ if (args[0] === "new") {
     process.exit(1);
   }
   await $`tmux new-session -s ${sessionName}`;
+  process.exit(0);
+}
+
+if (args[0] === "which") {
+  if (!process.env.TMUX) {
+    console.log("Not in a tmux session");
+    process.exit(1);
+  }
+  const sessionName = await $`tmux display-message -p "#S"`.text();
+  console.log(sessionName.trim());
   process.exit(0);
 }
 
