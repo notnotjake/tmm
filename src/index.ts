@@ -35,6 +35,13 @@ async function getSessions(): Promise<{ name: string; label: string }[]> {
   });
 }
 
+function findSessionByName(
+  sessions: { name: string; label: string }[],
+  targetName: string,
+): { name: string; label: string } | undefined {
+  return sessions.find((session) => session.name === targetName);
+}
+
 async function selectSessionWithFzf(
   sessions: { name: string; label: string }[],
   prompt = "Select a session > ",
@@ -60,6 +67,7 @@ function printHelp() {
   console.log(`${styles.title("tmm")} ${styles.muted("- tmux session manager")}`);
   console.log("");
   row("tmm", styles.label("tmm"), "Select and attach to a session");
+  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Attach to a session by name");
   row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create a new session");
   row("tmm rename", `${styles.label("tmm")} rename`, "Interactively rename a session");
   row(
@@ -68,6 +76,8 @@ function printHelp() {
     "Rename a session directly",
   );
   row("tmm remove", `${styles.label("tmm")} remove`, "Select sessions to remove");
+  row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove a session by name");
+  row("tmm ls", `${styles.label("tmm")} ls`, "List sessions");
   row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
   row("tmm help", `${styles.label("tmm")} help`, "Show this help");
 }
@@ -106,7 +116,47 @@ if (args[0] === "which") {
   process.exit(0);
 }
 
+if (args[0] === "ls") {
+  if (args.length > 1) {
+    console.log("Usage: tmm ls");
+    process.exit(1);
+  }
+
+  const sessions = await getSessions();
+
+  if (sessions.length === 0) {
+    console.log("No tmux sessions found");
+    process.exit(0);
+  }
+
+  for (const session of sessions) {
+    console.log(session.name);
+  }
+
+  process.exit(0);
+}
+
 if (args[0] === "remove") {
+  if (args.length > 2) {
+    console.log("Usage: tmm remove [session-name]");
+    process.exit(1);
+  }
+
+  const targetSessionName = args[1];
+  if (targetSessionName) {
+    const sessions = await getSessions();
+    const matched = findSessionByName(sessions, targetSessionName);
+
+    if (!matched) {
+      console.log(`Session not found: ${targetSessionName}`);
+      process.exit(1);
+    }
+
+    await $`tmux kill-session -t ${matched.name}`.quiet();
+    console.log(kleur.red(`Removed: ${matched.name}`));
+    process.exit(0);
+  }
+
   const sessions = await getSessions();
 
   if (sessions.length === 0) {
@@ -179,6 +229,25 @@ if (args[0] === "rename") {
   }
 
   await renameSession(selected, updatedName.trim());
+  process.exit(0);
+}
+
+if (args[0]) {
+  if (args.length > 1) {
+    console.log("Usage: tmm [session-name]");
+    process.exit(1);
+  }
+
+  const targetSessionName = args[0];
+  const sessions = await getSessions();
+  const matched = findSessionByName(sessions, targetSessionName);
+
+  if (!matched) {
+    console.log(`Session not found: ${targetSessionName}`);
+    process.exit(1);
+  }
+
+  await $`tmux attach -t ${matched.name}`;
   process.exit(0);
 }
 
