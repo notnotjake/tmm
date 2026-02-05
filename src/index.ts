@@ -66,17 +66,10 @@ function printHelp() {
   };
   console.log(`${styles.title("tmm")} ${styles.muted("- tmux session manager")}`);
   console.log("");
-  row("tmm", styles.label("tmm"), "Select and attach to a session");
-  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Attach to a session by name");
+  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Attach to a session");
   row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create a new session");
-  row("tmm rename", `${styles.label("tmm")} rename`, "Interactively rename a session");
-  row(
-    "tmm rename <old> <new>",
-    `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`,
-    "Rename a session directly",
-  );
-  row("tmm remove", `${styles.label("tmm")} remove`, "Select sessions to remove");
-  row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove a session by name");
+  row("tmm rename <old> <new>", `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`, "Rename a session");
+  row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove sessions");
   row("tmm ls", `${styles.label("tmm")} ls`, "List sessions");
   row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
   row("tmm help", `${styles.label("tmm")} help`, "Show this help");
