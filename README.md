@@ -14,7 +14,10 @@ bun link
 ```
 tmm                  # Select and attach to a session (fzf)
 tmm new <name>       # Create a new session
+tmm rename           # Select a session and rename it
+tmm rename <old> <new> # Rename a session directly
 tmm remove           # Select sessions to remove (multiselect)
+tmm which            # Show current session name
 tmm help             # Show help
 ```
 
