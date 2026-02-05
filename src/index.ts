@@ -35,8 +35,24 @@ async function getSessions(): Promise<{ name: string; label: string }[]> {
   });
 }
 
+async function selectSessionWithFzf(
+  sessions: { name: string; label: string }[],
+  prompt = "Select a session > ",
+): Promise<string | null> {
+  const fzfInput = sessions.map((s) => s.label).join("\n");
+  const selection = await $`echo ${fzfInput} | fzf --ansi --prompt=${prompt}`.text().catch(() => "");
+  const selectedLabel = selection.trim();
+  if (!selectedLabel) return null;
+
+  const matched = sessions.find((s) => s.label === selectedLabel);
+  if (matched) return matched.name;
+
+  // Fallback for unexpected formatting changes.
+  return selectedLabel.split(" ")[0] ?? null;
+}
+
 function printHelp() {
-  const pad = 20;
+  const pad = 27;
   const row = (cmd: string, styledCmd: string, desc: string) => {
     const padding = " ".repeat(pad - cmd.length);
     console.log(`  ${styledCmd}${padding}${desc}`);
@@ -45,9 +61,20 @@ function printHelp() {
   console.log("");
   row("tmm", styles.label("tmm"), "Select and attach to a session");
   row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create a new session");
+  row("tmm rename", `${styles.label("tmm")} rename`, "Interactively rename a session");
+  row(
+    "tmm rename <old> <new>",
+    `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`,
+    "Rename a session directly",
+  );
   row("tmm remove", `${styles.label("tmm")} remove`, "Select sessions to remove");
   row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
   row("tmm help", `${styles.label("tmm")} help`, "Show this help");
+}
+
+async function renameSession(oldName: string, newName: string): Promise<void> {
+  await $`tmux rename-session -t ${oldName} ${newName}`;
+  console.log(kleur.green(`Renamed: ${oldName} -> ${newName}`));
 }
 
 const args = process.argv.slice(2);
@@ -105,6 +132,56 @@ if (args[0] === "remove") {
   process.exit(0);
 }
 
+if (args[0] === "rename") {
+  const oldName = args[1];
+  const newName = args[2];
+
+  if (oldName && newName) {
+    if (oldName === newName) {
+      console.log("Old and new session names are the same");
+      process.exit(1);
+    }
+
+    await renameSession(oldName, newName);
+    process.exit(0);
+  }
+
+  if (oldName || newName) {
+    console.log("Usage: tmm rename <old-session-name> <new-session-name>");
+    process.exit(1);
+  }
+
+  const sessions = await getSessions();
+  if (sessions.length === 0) {
+    console.log("No tmux sessions found");
+    process.exit(0);
+  }
+
+  const selected = await selectSessionWithFzf(sessions, "Rename session > ");
+  if (!selected) {
+    process.exit(0);
+  }
+
+  const updatedName = await p.text({
+    message: `Enter new name for "${selected}"`,
+    placeholder: "new-session-name",
+    validate: (value) => {
+      const trimmed = (value ?? "").trim();
+      if (!trimmed) return "Session name is required";
+      if (trimmed === selected) return "New session name must be different";
+      return undefined;
+    },
+  });
+
+  if (p.isCancel(updatedName)) {
+    p.cancel("No session renamed");
+    process.exit(0);
+  }
+
+  await renameSession(selected, updatedName.trim());
+  process.exit(0);
+}
+
 // Default: list and attach
 const sessions = await getSessions();
 
@@ -113,18 +190,10 @@ if (sessions.length === 0) {
   process.exit(0);
 }
 
-// Format for fzf: label on each line
-const fzfInput = sessions.map((s) => s.label).join("\n");
-
-// Pipe to fzf for selection
-const selection = await $`echo ${fzfInput} | fzf --ansi`.text().catch(() => "");
-
-if (!selection.trim()) {
+const sessionName = await selectSessionWithFzf(sessions);
+if (!sessionName) {
   process.exit(0); // User cancelled
 }
-
-// Extract session name (first word before space)
-const sessionName = selection.split(" ")[0];
 
 // Attach
 await $`tmux attach -t ${sessionName}`;
