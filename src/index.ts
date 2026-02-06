@@ -118,7 +118,6 @@ if (args[0] === "ls") {
   const sessions = await getSessions();
 
   if (sessions.length === 0) {
-    console.log("No tmux sessions found");
     process.exit(0);
   }
 
