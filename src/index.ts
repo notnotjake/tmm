@@ -19,6 +19,15 @@ function formatDate(timestamp: number): string {
   });
 }
 
+function isInTmuxSession(): boolean {
+  return Boolean(process.env.TMUX);
+}
+
+async function getCurrentSessionName(): Promise<string> {
+  const sessionName = await $`tmux display-message -p "#S"`.text();
+  return sessionName.trim();
+}
+
 async function getSessions(): Promise<{ name: string; label: string }[]> {
   const raw = await $`tmux list-sessions -F "#{session_name}|#{session_activity}" 2>/dev/null`
     .text()
@@ -66,9 +75,11 @@ function printHelp() {
   };
   console.log(`${styles.title("tmm")} ${styles.muted("- tmux session manager")}`);
   console.log("");
-  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Attach to a session");
-  row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create a new session");
+  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Open a session");
+  row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create and open a new session");
+  row("tmm rename <new>", `${styles.label("tmm")} rename ${styles.muted("<new>")}`, "Rename current session (inside tmux)");
   row("tmm rename <old> <new>", `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`, "Rename a session");
+  row("tmm exit [-k|--kill]", `${styles.label("tmm")} exit ${styles.muted("[-k|--kill]")}`, "Exit current session (detach/remove)");
   row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove sessions");
   row("tmm ls", `${styles.label("tmm")} ls`, "List sessions");
   row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
@@ -78,6 +89,15 @@ function printHelp() {
 async function renameSession(oldName: string, newName: string): Promise<void> {
   await $`tmux rename-session -t ${oldName} ${newName}`;
   console.log(kleur.green(`Renamed: ${oldName} -> ${newName}`));
+}
+
+async function openSession(sessionName: string): Promise<void> {
+  if (isInTmuxSession()) {
+    await $`tmux switch-client -t ${sessionName}`;
+    return;
+  }
+
+  await $`tmux attach -t ${sessionName}`;
 }
 
 const args = process.argv.slice(2);
@@ -95,17 +115,71 @@ if (args[0] === "new") {
     console.log("Usage: tmm new <session-name>");
     process.exit(1);
   }
-  await $`tmux new-session -s ${sessionName}`;
+  await $`tmux new-session -d -s ${sessionName}`;
+  await openSession(sessionName);
   process.exit(0);
 }
 
 if (args[0] === "which") {
-  if (!process.env.TMUX) {
+  if (!isInTmuxSession()) {
     console.log("Not in a tmux session");
     process.exit(1);
   }
-  const sessionName = await $`tmux display-message -p "#S"`.text();
-  console.log(sessionName.trim());
+  console.log(await getCurrentSessionName());
+  process.exit(0);
+}
+
+if (args[0] === "exit") {
+  const exitArgs = args.slice(1);
+  if (exitArgs.length > 1) {
+    console.log("Usage: tmm exit [-k|--kill]");
+    process.exit(1);
+  }
+
+  const killFlag = exitArgs[0];
+  if (killFlag && killFlag !== "-k" && killFlag !== "--kill") {
+    console.log("Usage: tmm exit [-k|--kill]");
+    process.exit(1);
+  }
+
+  if (!isInTmuxSession()) {
+    console.log("Not in a tmux session");
+    process.exit(1);
+  }
+
+  const currentSessionName = await getCurrentSessionName();
+  if (killFlag) {
+    await $`tmux kill-session -t ${currentSessionName}`.quiet();
+    process.exit(0);
+  }
+
+  const action = await p.select({
+    message: `Exit session "${currentSessionName}"`,
+    options: [
+      {
+        value: "detach",
+        label: "Detach",
+        hint: "Leave session running",
+      },
+      {
+        value: "detach-and-remove",
+        label: "Detach and remove",
+        hint: "Kill current session",
+      },
+    ],
+  });
+
+  if (p.isCancel(action)) {
+    p.cancel("Session exit cancelled");
+    process.exit(0);
+  }
+
+  if (action === "detach") {
+    await $`tmux detach-client`;
+    process.exit(0);
+  }
+
+  await $`tmux kill-session -t ${currentSessionName}`.quiet();
   process.exit(0);
 }
 
@@ -175,8 +249,16 @@ if (args[0] === "remove") {
 }
 
 if (args[0] === "rename") {
-  const oldName = args[1];
-  const newName = args[2];
+  const renameArgs = args.slice(1);
+
+  if (renameArgs.length > 2) {
+    console.log("Usage: tmm rename [new-session-name]");
+    console.log("Usage: tmm rename <old-session-name> <new-session-name>");
+    process.exit(1);
+  }
+
+  const oldName = renameArgs[0];
+  const newName = renameArgs[1];
 
   if (oldName && newName) {
     if (oldName === newName) {
@@ -188,9 +270,22 @@ if (args[0] === "rename") {
     process.exit(0);
   }
 
-  if (oldName || newName) {
-    console.log("Usage: tmm rename <old-session-name> <new-session-name>");
-    process.exit(1);
+  if (oldName) {
+    if (!isInTmuxSession()) {
+      console.log("Not in a tmux session. Use one of:");
+      console.log("  tmm rename <old-session-name> <new-session-name>");
+      console.log("  tmm rename");
+      process.exit(1);
+    }
+
+    const currentSessionName = await getCurrentSessionName();
+    if (currentSessionName === oldName) {
+      console.log("Old and new session names are the same");
+      process.exit(1);
+    }
+
+    await renameSession(currentSessionName, oldName);
+    process.exit(0);
   }
 
   const sessions = await getSessions();
@@ -239,7 +334,7 @@ if (args[0]) {
     process.exit(1);
   }
 
-  await $`tmux attach -t ${matched.name}`;
+  await openSession(matched.name);
   process.exit(0);
 }
 
@@ -256,5 +351,5 @@ if (!sessionName) {
   process.exit(0); // User cancelled
 }
 
-// Attach
-await $`tmux attach -t ${sessionName}`;
+// Attach or switch
+await openSession(sessionName);
