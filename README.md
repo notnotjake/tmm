@@ -14,7 +14,7 @@ bun link
 ```
 tmm                  # Select and open a session (attach/switch)
 tmm <name>           # Open a session by name (attach/switch)
-tmm new <name>       # Create a new session
+tmm new <name>       # Create and open a new session (attach/switch)
 tmm rename           # Select a session and rename it
 tmm rename <new>     # Rename the current session (inside tmux)
 tmm rename <old> <new> # Rename a session directly
