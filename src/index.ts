@@ -79,7 +79,7 @@ function printHelp() {
   row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create and open a new session");
   row("tmm rename <new>", `${styles.label("tmm")} rename ${styles.muted("<new>")}`, "Rename current session (inside tmux)");
   row("tmm rename <old> <new>", `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`, "Rename a session");
-  row("tmm exit [-k|--kill]", `${styles.label("tmm")} exit ${styles.muted("[-k|--kill]")}`, "Exit current session (detach/remove)");
+  row("tmm exit [-d|--detach|-k|--kill]", `${styles.label("tmm")} exit ${styles.muted("[-d|--detach|-k|--kill]")}`, "Exit current session (detach/remove)");
   row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove sessions");
   row("tmm ls", `${styles.label("tmm")} ls`, "List sessions");
   row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
@@ -132,13 +132,13 @@ if (args[0] === "which") {
 if (args[0] === "exit") {
   const exitArgs = args.slice(1);
   if (exitArgs.length > 1) {
-    console.log("Usage: tmm exit [-k|--kill]");
+    console.log("Usage: tmm exit [-d|--detach|-k|--kill]");
     process.exit(1);
   }
 
-  const killFlag = exitArgs[0];
-  if (killFlag && killFlag !== "-k" && killFlag !== "--kill") {
-    console.log("Usage: tmm exit [-k|--kill]");
+  const exitFlag = exitArgs[0];
+  if (exitFlag && exitFlag !== "-d" && exitFlag !== "--detach" && exitFlag !== "-k" && exitFlag !== "--kill") {
+    console.log("Usage: tmm exit [-d|--detach|-k|--kill]");
     process.exit(1);
   }
 
@@ -148,8 +148,13 @@ if (args[0] === "exit") {
   }
 
   const currentSessionName = await getCurrentSessionName();
-  if (killFlag) {
+  if (exitFlag === "-k" || exitFlag === "--kill") {
     await $`tmux kill-session -t ${currentSessionName}`.quiet();
+    process.exit(0);
+  }
+
+  if (exitFlag === "-d" || exitFlag === "--detach") {
+    await $`tmux detach-client`;
     process.exit(0);
   }
 

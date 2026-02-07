@@ -18,7 +18,7 @@ tmm new <name>       # Create and open a new session (attach/switch)
 tmm rename           # Select a session and rename it
 tmm rename <new>     # Rename the current session (inside tmux)
 tmm rename <old> <new> # Rename a session directly
-tmm exit [-k|--kill] # Exit current session (prompt by default, kill with flag)
+tmm exit [-d|--detach|-k|--kill] # Exit current session (prompt by default, or non-interactive with --detach/--kill)
 tmm remove           # Select sessions to remove (multiselect)
 tmm remove <name>    # Remove a session by name
 tmm ls               # List sessions (non-interactive)
