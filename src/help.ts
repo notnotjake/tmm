@@ -42,11 +42,17 @@ const commandHelp: Record<
     ],
   },
   new: {
-    summary: "Create and open a new tmux session",
+    summary: "Create a new tmux session",
     usage: [
       {
         value: "new <session-name>",
-        description: "Create and open a new session.",
+        description: "Create and open a new session (default).",
+        options: [
+          {
+            value: "-b, --background",
+            description: "Create the session without attaching/switching to it.",
+          },
+        ],
       },
     ],
   },
@@ -201,7 +207,7 @@ export function printMainHelp(): void {
   console.log("");
   console.log(styles.heading("Commands:"));
   printCommandRows([
-    { value: "new <name>", description: "Create and open a new session" },
+    { value: "new <name>", description: "Create a new session" },
     { value: "rename", description: "Select and rename a session" },
     { value: "remove [name]", description: "Remove sessions" },
     { value: "exit", description: "Exit current session (detach/remove)" },

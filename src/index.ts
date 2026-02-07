@@ -121,13 +121,34 @@ if (isNamedCommand(command) && args.slice(1).some((arg) => isHelpFlag(arg))) {
 
 // Handle subcommands
 if (args[0] === "new") {
-  const sessionName = args[1];
-  if (!sessionName || args.length !== 2) {
+  const newArgs = args.slice(1);
+  let openInBackground = false;
+  const positionalArgs: string[] = [];
+
+  for (const arg of newArgs) {
+    if (arg === "-b" || arg === "--background") {
+      openInBackground = true;
+      continue;
+    }
+
+    if (arg.startsWith("-")) {
+      printCommandHelp("new");
+      process.exit(1);
+    }
+
+    positionalArgs.push(arg);
+  }
+
+  if (positionalArgs.length !== 1) {
     printCommandHelp("new");
     process.exit(1);
   }
+
+  const sessionName = positionalArgs[0]!;
   await $`tmux new-session -d -s ${sessionName}`;
-  await openSession(sessionName);
+  if (!openInBackground) {
+    await openSession(sessionName);
+  }
   process.exit(0);
 }
 
