@@ -30,6 +30,10 @@ async function getCurrentSessionName(): Promise<string> {
 }
 
 async function getSessions(): Promise<{ name: string; label: string }[]> {
+  const currentSessionName = isInTmuxSession()
+    ? await getCurrentSessionName().catch(() => "")
+    : "";
+
   const raw = await $`tmux list-sessions -F "#{session_name}|#{session_activity}" 2>/dev/null`
     .text()
     .catch(() => "");
@@ -41,7 +45,8 @@ async function getSessions(): Promise<{ name: string; label: string }[]> {
     const name = parts[0] ?? "";
     const activity = parts[1] ?? "0";
     const date = formatDate(parseInt(activity));
-    return { name, label: `${name} ${kleur.dim(`(${date})`)}` };
+    const activeBadge = name === currentSessionName ? ` ${kleur.bold("Active")}` : "";
+    return { name, label: `${name}${activeBadge} ${kleur.dim(`(${date})`)}` };
   });
 }
 
