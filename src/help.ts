@@ -12,11 +12,15 @@ type HelpRow = {
   description: string;
 };
 
+type UsageRow = {
+  value: string;
+  description: string;
+  options?: HelpRow[];
+};
+
 type CommandHelp = {
   summary: string;
-  usage: string[];
-  arguments?: HelpRow[];
-  options?: HelpRow[];
+  usage: UsageRow[];
   notes?: string[];
 };
 
@@ -30,74 +34,88 @@ const commandHelp: Record<
 > = {
   open: {
     summary: "Open a tmux session",
-    usage: ["[session-name]"],
-    arguments: [
+    usage: [
       {
         value: "[session-name]",
-        description: "Existing session to open. Omit to select interactively.",
+        description: "Open by name. Omit to select a session interactively.",
       },
     ],
   },
   new: {
     summary: "Create and open a new tmux session",
-    usage: ["new <session-name>"],
-    arguments: [
+    usage: [
       {
-        value: "<session-name>",
-        description: "Session name to create and open.",
+        value: "new <session-name>",
+        description: "Create and open a new session.",
       },
     ],
   },
   rename: {
     summary: "Rename tmux sessions",
     usage: [
-      "rename",
-      "rename <new-session-name>",
-      "rename <old-session-name> <new-session-name>",
-    ],
-    arguments: [
       {
-        value: "<new-session-name>",
+        value: "rename",
+        description: "Select a session and rename it.",
+      },
+      {
+        value: "rename <new>",
         description: "Rename the current session (inside tmux).",
       },
       {
-        value: "<old-session-name> <new-session-name>",
+        value: "rename <old> <new>",
         description: "Rename a specific session directly.",
       },
     ],
   },
   exit: {
     summary: "Exit the current tmux session",
-    usage: ["exit [options]"],
-    options: [
+    usage: [
       {
-        value: "-d, --detach",
-        description: "Detach from the current session and keep it running.",
-      },
-      {
-        value: "-k, --kill",
-        description: "Kill the current session.",
+        value: "exit",
+        description: "Prompt to detach or detach-and-remove.",
+        options: [
+          {
+            value: "-d, --detach",
+            description: "Detach and keep the session running.",
+          },
+          {
+            value: "-k, --kill",
+            description: "Kill the current session.",
+          },
+        ],
       },
     ],
-    notes: ["Without options, prompts to detach or detach-and-remove."],
   },
   remove: {
     summary: "Remove tmux sessions",
-    usage: ["remove [session-name]"],
-    arguments: [
+    usage: [
       {
-        value: "[session-name]",
-        description: "Session to remove. Omit to choose multiple interactively.",
+        value: "remove",
+        description: "Select one or more sessions and remove them.",
+      },
+      {
+        value: "remove <name>",
+        description: "Remove a specific session by name.",
       },
     ],
   },
   ls: {
     summary: "List tmux session names",
-    usage: ["ls"],
+    usage: [
+      {
+        value: "ls",
+        description: "Print tmux session names.",
+      },
+    ],
   },
   which: {
     summary: "Show current tmux session name",
-    usage: ["which"],
+    usage: [
+      {
+        value: "which",
+        description: "Print the current tmux session name.",
+      },
+    ],
   },
 };
 
@@ -113,10 +131,25 @@ const namedCommands: readonly NamedCommand[] = [
   "which",
 ];
 
-function printRows(rows: HelpRow[], pad = 32): void {
+function printOptionRows(rows: HelpRow[], descriptionColumn: number): void {
   for (const row of rows) {
-    const padding = " ".repeat(Math.max(2, pad - row.value.length));
-    console.log(`  ${styles.label(row.value)}${padding}${row.description}`);
+    const prefixIndent = 4;
+    const prefixLen = prefixIndent + row.value.length;
+
+    if (prefixLen >= descriptionColumn - 2) {
+      console.log(`    ${styles.label(row.value)}`);
+      console.log(
+        `${" ".repeat(descriptionColumn)}${styles.muted(row.description)}`,
+      );
+      continue;
+    }
+
+    const padding = " ".repeat(
+      Math.max(2, descriptionColumn - prefixLen),
+    );
+    console.log(
+      `    ${styles.label(row.value)}${padding}${styles.muted(row.description)}`,
+    );
   }
 }
 
@@ -157,16 +190,17 @@ export function printMainHelp(): void {
   console.log(`${styles.title("tmm")} ${styles.muted("tmux session manager")}`);
   console.log("");
   console.log(styles.heading("Usage:"));
-  console.log(
-    `  ${styles.label("tmm")} <command> ${styles.muted("[...flags] [...args]")}`,
-  );
+  printCommandRows([
+    { value: "tmm", description: "Open a session interactively" },
+    { value: "tmm <session-name>", description: "Open a session by name" },
+    {
+      value: "tmm <command> [opts]",
+      description: "Run a command",
+    },
+  ]);
   console.log("");
   console.log(styles.heading("Commands:"));
   printCommandRows([
-    {
-      value: "[session-name]",
-      description: "Open a session (interactively or by name)",
-    },
     { value: "new <name>", description: "Create and open a new session" },
     { value: "rename", description: "Select and rename a session" },
     { value: "remove [name]", description: "Remove sessions" },
@@ -192,37 +226,54 @@ export function printCommandHelp(
 ): void {
   const detailed = printOptions.detailed ?? true;
   const doc = commandHelp[target];
-  console.log(`${styles.title("tmm")} ${styles.muted(doc.summary)}`);
-  console.log("");
+  const showDefaultOnly = !detailed && doc.usage.length > 1;
+  const usageRows = showDefaultOnly ? [doc.usage[0] ?? {
+    value: target,
+    description: doc.summary,
+  }] : doc.usage;
+  const noteRows = [...(doc.notes ?? [])];
+  if (showDefaultOnly) {
+    const commandName = target === "open" ? "session-name" : target;
+    noteRows.push(`Run \`tmm ${commandName} --help\` to see additional usage forms.`);
+  }
+  const commandLabel =
+    target === "open" ? "[session-name]" : (usageRows[0]?.value ?? target);
 
-  const usageLines =
-    !detailed && target === "rename" ? [doc.usage[0] ?? "rename"] : doc.usage;
-  const argumentRows =
-    !detailed && target === "rename" ? [] : (doc.arguments ?? []);
-  const noteRows =
-    !detailed && target === "rename"
-      ? ["Run `tmm rename --help` to see additional usage forms."]
-      : (doc.notes ?? []);
+  console.log(
+    `${styles.label("tmm")} ${formatCommandValue(commandLabel)} ${styles.muted("•")} ${styles.muted(doc.summary.toLowerCase())}`,
+  );
+  console.log("");
 
   console.log(styles.heading("Usage:"));
-  for (const usageLine of usageLines) {
-    console.log(`  ${styles.label("tmm")} ${formatCommandValue(usageLine)}`);
-  }
+  const usageTextRows = usageRows.map((usageRow) => `tmm ${usageRow.value}`);
+  const widestUsage = usageTextRows.reduce(
+    (max, usage) => Math.max(max, usage.length),
+    0,
+  );
+  const usageColumn = Math.min(Math.max(30, widestUsage + 2), 46);
+  const descriptionColumn = usageColumn + 2;
 
-  if (argumentRows.length > 0) {
-    console.log("");
-    console.log("Arguments:");
-    printRows(argumentRows);
-  }
+  usageRows.forEach((usageRow, index) => {
+    const usageText = usageTextRows[index] ?? `tmm ${usageRow.value}`;
+    const usagePrefixLen = 2 + usageText.length;
 
-  const optionRows: HelpRow[] = [...(doc.options ?? []), {
-    value: "-h, --help",
-    description: "Show help for this command.",
-  }];
+    if (usagePrefixLen >= descriptionColumn - 2) {
+      console.log(`  ${styles.label("tmm")} ${formatCommandValue(usageRow.value)}`);
+      console.log(`${" ".repeat(descriptionColumn)}${usageRow.description}`);
+    } else {
+      const padding = " ".repeat(
+        Math.max(2, descriptionColumn - usagePrefixLen),
+      );
+      console.log(
+        `  ${styles.label("tmm")} ${formatCommandValue(usageRow.value)}${padding}${usageRow.description}`,
+      );
+    }
 
-  console.log("");
-  console.log("Options:");
-  printRows(optionRows);
+    const optionRows: HelpRow[] = [...(usageRow.options ?? [])];
+    if (optionRows.length > 0) {
+      printOptionRows(optionRows, descriptionColumn);
+    }
+  });
 
   if (noteRows.length > 0) {
     console.log("");
