@@ -12,11 +12,13 @@ bun link
 ## Usage
 
 ```
-tmm                  # Select and attach to a session (fzf)
-tmm <name>           # Attach to a session by name
+tmm                  # Select and open a session (attach/switch)
+tmm <name>           # Open a session by name (attach/switch)
 tmm new <name>       # Create a new session
 tmm rename           # Select a session and rename it
+tmm rename <new>     # Rename the current session (inside tmux)
 tmm rename <old> <new> # Rename a session directly
+tmm exit [-k|--kill] # Exit current session (prompt by default, kill with flag)
 tmm remove           # Select sessions to remove (multiselect)
 tmm remove <name>    # Remove a session by name
 tmm ls               # List sessions (non-interactive)
