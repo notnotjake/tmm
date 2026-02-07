@@ -2,12 +2,13 @@
 import { $ } from "bun";
 import * as p from "@clack/prompts";
 import kleur from "kleur";
-
-const styles = {
-  title: kleur.bold().blue,
-  muted: kleur.dim,
-  label: kleur.bold().blue,
-};
+import {
+  isHelpFlag,
+  isNamedCommand,
+  printCommandHelp,
+  printMainHelp,
+  resolveHelpTarget,
+} from "./help";
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp * 1000);
@@ -40,7 +41,7 @@ async function getSessions(): Promise<{ name: string; label: string }[]> {
     const name = parts[0] ?? "";
     const activity = parts[1] ?? "0";
     const date = formatDate(parseInt(activity));
-    return { name, label: `${name} ${styles.muted(`(${date})`)}` };
+    return { name, label: `${name} ${kleur.dim(`(${date})`)}` };
   });
 }
 
@@ -67,25 +68,6 @@ async function selectSessionWithFzf(
   return selectedLabel.split(" ")[0] ?? null;
 }
 
-function printHelp() {
-  const pad = 27;
-  const row = (cmd: string, styledCmd: string, desc: string) => {
-    const padding = " ".repeat(pad - cmd.length);
-    console.log(`  ${styledCmd}${padding}${desc}`);
-  };
-  console.log(`${styles.title("tmm")} ${styles.muted("- tmux session manager")}`);
-  console.log("");
-  row("tmm <name>", `${styles.label("tmm")} ${styles.muted("<name>")}`, "Open a session");
-  row("tmm new <name>", `${styles.label("tmm")} new ${styles.muted("<name>")}`, "Create and open a new session");
-  row("tmm rename <new>", `${styles.label("tmm")} rename ${styles.muted("<new>")}`, "Rename current session (inside tmux)");
-  row("tmm rename <old> <new>", `${styles.label("tmm")} rename ${styles.muted("<old> <new>")}`, "Rename a session");
-  row("tmm exit [-d|--detach|-k|--kill]", `${styles.label("tmm")} exit ${styles.muted("[-d|--detach|-k|--kill]")}`, "Exit current session (detach/remove)");
-  row("tmm remove <name>", `${styles.label("tmm")} remove ${styles.muted("<name>")}`, "Remove sessions");
-  row("tmm ls", `${styles.label("tmm")} ls`, "List sessions");
-  row("tmm which", `${styles.label("tmm")} which`, "Show current session name");
-  row("tmm help", `${styles.label("tmm")} help`, "Show this help");
-}
-
 async function renameSession(oldName: string, newName: string): Promise<void> {
   await $`tmux rename-session -t ${oldName} ${newName}`;
   console.log(kleur.green(`Renamed: ${oldName} -> ${newName}`));
@@ -101,18 +83,47 @@ async function openSession(sessionName: string): Promise<void> {
 }
 
 const args = process.argv.slice(2);
+const command = args[0];
 
 // Handle help
-if (args[0] === "help" || args[0] === "-h" || args[0] === "--help") {
-  printHelp();
+if (isHelpFlag(command)) {
+  printMainHelp();
+  process.exit(0);
+}
+
+if (command === "help") {
+  const target = args[1];
+
+  if (!target || isHelpFlag(target)) {
+    printMainHelp();
+    process.exit(0);
+  }
+
+  if (args.length > 2) {
+    console.log("Usage: tmm help [command]");
+    process.exit(1);
+  }
+
+  const resolvedTarget = resolveHelpTarget(target);
+  if (!resolvedTarget) {
+    console.log(`Unknown command: ${target}`);
+    process.exit(1);
+  }
+
+  printCommandHelp(resolvedTarget, { detailed: false });
+  process.exit(0);
+}
+
+if (isNamedCommand(command) && args.slice(1).some((arg) => isHelpFlag(arg))) {
+  printCommandHelp(command);
   process.exit(0);
 }
 
 // Handle subcommands
 if (args[0] === "new") {
   const sessionName = args[1];
-  if (!sessionName) {
-    console.log("Usage: tmm new <session-name>");
+  if (!sessionName || args.length !== 2) {
+    printCommandHelp("new");
     process.exit(1);
   }
   await $`tmux new-session -d -s ${sessionName}`;
@@ -121,6 +132,11 @@ if (args[0] === "new") {
 }
 
 if (args[0] === "which") {
+  if (args.length > 1) {
+    printCommandHelp("which");
+    process.exit(1);
+  }
+
   if (!isInTmuxSession()) {
     console.log("Not in a tmux session");
     process.exit(1);
@@ -132,13 +148,13 @@ if (args[0] === "which") {
 if (args[0] === "exit") {
   const exitArgs = args.slice(1);
   if (exitArgs.length > 1) {
-    console.log("Usage: tmm exit [-d|--detach|-k|--kill]");
+    printCommandHelp("exit");
     process.exit(1);
   }
 
   const exitFlag = exitArgs[0];
   if (exitFlag && exitFlag !== "-d" && exitFlag !== "--detach" && exitFlag !== "-k" && exitFlag !== "--kill") {
-    console.log("Usage: tmm exit [-d|--detach|-k|--kill]");
+    printCommandHelp("exit");
     process.exit(1);
   }
 
@@ -190,7 +206,7 @@ if (args[0] === "exit") {
 
 if (args[0] === "ls") {
   if (args.length > 1) {
-    console.log("Usage: tmm ls");
+    printCommandHelp("ls");
     process.exit(1);
   }
 
@@ -209,7 +225,7 @@ if (args[0] === "ls") {
 
 if (args[0] === "remove") {
   if (args.length > 2) {
-    console.log("Usage: tmm remove [session-name]");
+    printCommandHelp("remove");
     process.exit(1);
   }
 
@@ -257,8 +273,7 @@ if (args[0] === "rename") {
   const renameArgs = args.slice(1);
 
   if (renameArgs.length > 2) {
-    console.log("Usage: tmm rename [new-session-name]");
-    console.log("Usage: tmm rename <old-session-name> <new-session-name>");
+    printCommandHelp("rename");
     process.exit(1);
   }
 
@@ -326,7 +341,7 @@ if (args[0] === "rename") {
 
 if (args[0]) {
   if (args.length > 1) {
-    console.log("Usage: tmm [session-name]");
+    printCommandHelp("open");
     process.exit(1);
   }
 

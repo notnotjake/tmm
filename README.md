@@ -23,7 +23,8 @@ tmm remove           # Select sessions to remove (multiselect)
 tmm remove <name>    # Remove a session by name
 tmm ls               # List sessions (non-interactive)
 tmm which            # Show current session name
-tmm help             # Show help
+tmm help [command]   # Show help (or command-specific help)
+tmm <command> --help # Show command-specific help
 ```
 
 ## Requirements
