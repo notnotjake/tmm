@@ -87,6 +87,170 @@ async function openSession(sessionName: string): Promise<void> {
   await $`tmux attach -t ${sessionName}`;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function buildRunCommand(commandArgs: string[]): string {
+  if (commandArgs.length === 1) {
+    return commandArgs[0] ?? "";
+  }
+
+  return commandArgs.map((arg) => shellEscape(arg)).join(" ");
+}
+
+function splitLines(value: string): string[] {
+  if (!value) return [];
+  return value.split("\n");
+}
+
+function diffLines(before: string, after: string): string {
+  const beforeLines = splitLines(before);
+  const afterLines = splitLines(after);
+  let idx = 0;
+
+  while (idx < beforeLines.length && idx < afterLines.length) {
+    if (beforeLines[idx] !== afterLines[idx]) {
+      break;
+    }
+    idx += 1;
+  }
+
+  return afterLines.slice(idx).join("\n").trimEnd();
+}
+
+function formatRunBoundary(label: string, width = 40, fillChar = "═"): string {
+  const padLength = Math.max(0, width - label.length - 1);
+  if (padLength === 0) {
+    return label;
+  }
+
+  return `${label} ${fillChar.repeat(padLength)}`;
+}
+
+function printSessionOutput(options: {
+  sessionName: string;
+  output?: string;
+  topMessage?: string;
+}): void {
+  const { sessionName, output, topMessage } = options;
+  const runHeader = kleur.bold().cyan(formatRunBoundary(`tmm - ${sessionName}`, 40, "⌄"));
+  const runFooter = kleur.bold().blue(formatRunBoundary(`END - ${sessionName}`, 40, "⌃"));
+
+  if (topMessage) {
+    console.log(kleur.dim(topMessage));
+  }
+
+  console.log(runHeader);
+
+  if (output) {
+    console.log(output);
+  }
+
+  console.log(runFooter);
+}
+
+async function getActivePaneId(sessionName: string): Promise<string> {
+  const paneId = await $`tmux display-message -p -t ${sessionName}:. "#{pane_id}"`.text().catch(() => "");
+  return paneId.trim();
+}
+
+async function capturePane(paneId: string, start: string): Promise<string> {
+  const output = await $`tmux capture-pane -p -t ${paneId} -S ${start}`.text();
+  return output.replaceAll("\r", "");
+}
+
+async function getPaneCurrentCommand(paneId: string): Promise<string> {
+  const command = await $`tmux display-message -p -t ${paneId} "#{pane_current_command}"`.text().catch(() => "");
+  return command.trim();
+}
+
+async function sendKeysToPane(paneId: string, keys: string[]): Promise<void> {
+  const proc = Bun.spawn({
+    cmd: ["tmux", "send-keys", "-t", paneId, ...keys],
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+
+  if (exitCode === 0) return;
+
+  const stderr = proc.stderr ? (await new Response(proc.stderr).text()).trim() : "";
+  throw new Error(stderr || `tmux send-keys failed with exit code ${exitCode}`);
+}
+
+async function executeAndPrintPaneDiff(options: {
+  paneId: string;
+  sessionName: string;
+  action: () => Promise<void>;
+  timeoutMs?: number;
+  stableMs?: number;
+  timeoutMessage: string;
+}): Promise<number> {
+  const {
+    paneId,
+    sessionName,
+    action,
+    timeoutMs = 5000,
+    stableMs = 500,
+    timeoutMessage,
+  } = options;
+
+  const beforePane = await capturePane(paneId, "-50000").catch(() => "");
+  const shellCommand = await getPaneCurrentCommand(paneId);
+
+  await action();
+
+  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  let changedFromShell = false;
+  let lastShellSeenAt = 0;
+  let timedOut = true;
+
+  while (Date.now() < deadline) {
+    const currentCommand = await getPaneCurrentCommand(paneId);
+
+    if (currentCommand !== shellCommand) {
+      changedFromShell = true;
+      lastShellSeenAt = 0;
+      await sleep(100);
+      continue;
+    }
+
+    // If pane_current_command did not change (very short action), allow
+    // completion once we have a brief grace period and stable shell state.
+    if (!changedFromShell && Date.now() - startedAt < 250) {
+      await sleep(100);
+      continue;
+    }
+
+    if (lastShellSeenAt === 0) {
+      lastShellSeenAt = Date.now();
+    }
+
+    if (Date.now() - lastShellSeenAt >= stableMs) {
+      timedOut = false;
+      break;
+    }
+
+    await sleep(100);
+  }
+
+  const afterPane = await capturePane(paneId, "-50000").catch(() => "");
+  const diffOutput = diffLines(beforePane, afterPane);
+  printSessionOutput({
+    sessionName,
+    output: diffOutput || undefined,
+    topMessage: timedOut ? timeoutMessage : undefined,
+  });
+
+  return timedOut ? 124 : 0;
+}
+
 const args = process.argv.slice(2);
 const command = args[0];
 
@@ -155,6 +319,167 @@ if (args[0] === "new") {
     await openSession(sessionName);
   }
   process.exit(0);
+}
+
+if (args[0] === "run") {
+  const runArgs = args.slice(1);
+  const separatorIndex = runArgs.indexOf("--");
+
+  if (separatorIndex !== 1 || runArgs.length < 3) {
+    printCommandHelp("run");
+    process.exit(1);
+  }
+
+  const sessionName = runArgs[0]!;
+  const commandArgs = runArgs.slice(separatorIndex + 1);
+  if (commandArgs.length === 0) {
+    printCommandHelp("run");
+    process.exit(1);
+  }
+
+  const sessions = await getSessions();
+  const matched = findSessionByName(sessions, sessionName);
+
+  if (!matched) {
+    console.log(`Session not found: ${sessionName}`);
+    process.exit(1);
+  }
+
+  const paneId = await getActivePaneId(matched.name);
+  if (!paneId) {
+    console.log(`Could not resolve active pane for session: ${matched.name}`);
+    process.exit(1);
+  }
+
+  const commandText = buildRunCommand(commandArgs);
+  let exitCode = 1;
+  try {
+    exitCode = await executeAndPrintPaneDiff({
+      paneId,
+      sessionName: matched.name,
+      action: async () => {
+        await $`tmux send-keys -t ${paneId} -l ${commandText}`;
+        await $`tmux send-keys -t ${paneId} C-m`;
+      },
+      timeoutMs: 5000,
+      stableMs: 500,
+      timeoutMessage: "Key send timed out after 5s; showing output captured so far.",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to run command in session";
+    console.log(message);
+    process.exit(1);
+  }
+
+  process.exit(exitCode);
+}
+
+if (args[0] === "tail") {
+  const tailArgs = args.slice(1);
+  if (tailArgs.length === 0) {
+    printCommandHelp("tail");
+    process.exit(1);
+  }
+
+  const sessionName = tailArgs[0]!;
+  let lineCount = 10;
+
+  for (let i = 1; i < tailArgs.length; i += 1) {
+    const arg = tailArgs[i];
+
+    if (arg === "-l" || arg === "--lines") {
+      const nextValue = tailArgs[i + 1];
+      if (!nextValue) {
+        printCommandHelp("tail");
+        process.exit(1);
+      }
+
+      const parsed = Number.parseInt(nextValue, 10);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        console.log("Line count must be a positive integer");
+        process.exit(1);
+      }
+
+      lineCount = parsed;
+      i += 1;
+      continue;
+    }
+
+    printCommandHelp("tail");
+    process.exit(1);
+  }
+
+  const sessions = await getSessions();
+  const matched = findSessionByName(sessions, sessionName);
+
+  if (!matched) {
+    console.log(`Session not found: ${sessionName}`);
+    process.exit(1);
+  }
+
+  const paneId = await getActivePaneId(matched.name);
+  if (!paneId) {
+    console.log(`Could not resolve active pane for session: ${matched.name}`);
+    process.exit(1);
+  }
+
+  const paneOutput = await capturePane(paneId, `-${lineCount}`).catch(() => "");
+  printSessionOutput({
+    sessionName: matched.name,
+    output: paneOutput.trimEnd() || undefined,
+  });
+
+  process.exit(0);
+}
+
+if (args[0] === "keys") {
+  const keysArgs = args.slice(1);
+  if (keysArgs.length < 2) {
+    printCommandHelp("keys");
+    process.exit(1);
+  }
+
+  const sessionName = keysArgs[0]!;
+  const rawKeyTokens = keysArgs.slice(1);
+  const keyTokens = rawKeyTokens[0] === "--" ? rawKeyTokens.slice(1) : rawKeyTokens;
+  if (keyTokens.length === 0) {
+    printCommandHelp("keys");
+    process.exit(1);
+  }
+
+  const sessions = await getSessions();
+  const matched = findSessionByName(sessions, sessionName);
+
+  if (!matched) {
+    console.log(`Session not found: ${sessionName}`);
+    process.exit(1);
+  }
+
+  const paneId = await getActivePaneId(matched.name);
+  if (!paneId) {
+    console.log(`Could not resolve active pane for session: ${matched.name}`);
+    process.exit(1);
+  }
+
+  let exitCode = 1;
+  try {
+    exitCode = await executeAndPrintPaneDiff({
+      paneId,
+      sessionName: matched.name,
+      action: async () => {
+        await sendKeysToPane(paneId, keyTokens);
+      },
+      timeoutMs: 5000,
+      stableMs: 500,
+      timeoutMessage: "Key send timed out after 5s; showing output captured so far.",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to send keys";
+    console.log(message);
+    process.exit(1);
+  }
+
+  process.exit(exitCode);
 }
 
 if (args[0] === "which") {

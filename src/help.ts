@@ -29,14 +29,14 @@ type CommandHelpPrintOptions = {
 };
 
 const commandHelp: Record<
-  "open" | "new" | "rename" | "exit" | "remove" | "ls" | "which",
+  "open" | "new" | "rename" | "exit" | "remove" | "ls" | "which" | "run" | "tail" | "keys",
   CommandHelp
 > = {
   open: {
     summary: "Open a tmux session",
     usage: [
       {
-        value: "[session-name]",
+        value: "[session]",
         description: "Open by name. Omit to select a session interactively.",
       },
     ],
@@ -45,7 +45,7 @@ const commandHelp: Record<
     summary: "Create a new tmux session",
     usage: [
       {
-        value: "new <session-name>",
+        value: "new <session>",
         description: "Create and open a new session (default).",
         options: [
           {
@@ -123,6 +123,57 @@ const commandHelp: Record<
       },
     ],
   },
+  run: {
+    summary: "Run a command inside a tmux session and return output",
+    usage: [
+      {
+        value: "run <session> -- <cmd>",
+        description: "Execute a command in the session's active pane and print output.",
+      },
+    ],
+    notes: [
+      "If you need shell operators, pass a single quoted command or use: sh -lc '<command>'.",
+      "The command runs directly in the session shell and prints newly added terminal lines.",
+      "If the command does not settle within 5 seconds, partial output is returned and run exits with code 124.",
+    ],
+  },
+  tail: {
+    summary: "Print recent scrollback from a tmux session",
+    usage: [
+      {
+        value: "tail <session>",
+        description: "Print the last 10 lines from the session's active pane.",
+      },
+      {
+        value: "tail <session> -l <lines>",
+        description: "Print the last <lines> lines.",
+        options: [
+          {
+            value: "-l, --lines",
+            description: "Number of lines to print (default: 10).",
+          },
+        ],
+      },
+    ],
+  },
+  keys: {
+    summary: "Send keys directly to a tmux session",
+    usage: [
+      {
+        value: "keys <session> <key>",
+        description: "Pass key tokens directly to tmux send-keys.",
+      },
+      {
+        value: "keys <session> -- <key>",
+        description: "Use -- when key tokens could look like flags.",
+      },
+    ],
+    notes: [
+      "No Enter key is added automatically.",
+      "Examples: tmm keys api C-c, tmm keys api Enter, tmm keys api -l \"npm run dev\".",
+      "After sending keys, tmm prints newly added terminal lines and exits with code 124 on 5s timeout.",
+    ],
+  },
 };
 
 export type HelpTarget = keyof typeof commandHelp;
@@ -135,6 +186,9 @@ const namedCommands: readonly NamedCommand[] = [
   "remove",
   "ls",
   "which",
+  "run",
+  "tail",
+  "keys",
 ];
 
 function printOptionRows(rows: HelpRow[], descriptionColumn: number): void {
@@ -198,7 +252,7 @@ export function printMainHelp(): void {
   console.log(styles.heading("Usage:"));
   printCommandRows([
     { value: "tmm", description: "Open a session interactively" },
-    { value: "tmm <session-name>", description: "Open a session by name" },
+    { value: "tmm <session>", description: "Open a session by name" },
     {
       value: "tmm <command> [opts]",
       description: "Run a command",
@@ -211,6 +265,12 @@ export function printMainHelp(): void {
     { value: "rename", description: "Select and rename a session" },
     { value: "remove [name]", description: "Remove sessions" },
     { value: "exit", description: "Exit current session (detach/remove)" },
+  ]);
+  console.log("");
+  printCommandRows([
+    { value: "tail <name> [--lines N]", description: "Show recent session output" },
+    { value: "run <name> -- <cmd>", description: "Run command in session" },
+    { value: "keys <name> <key>", description: "Send keys to session" },
   ]);
   console.log("");
   printCommandRows([
@@ -239,11 +299,11 @@ export function printCommandHelp(
   }] : doc.usage;
   const noteRows = [...(doc.notes ?? [])];
   if (showDefaultOnly) {
-    const commandName = target === "open" ? "session-name" : target;
+    const commandName = target === "open" ? "session" : target;
     noteRows.push(`Run \`tmm ${commandName} --help\` to see additional usage forms.`);
   }
   const commandLabel =
-    target === "open" ? "[session-name]" : (usageRows[0]?.value ?? target);
+    target === "open" ? "[session]" : (usageRows[0]?.value ?? target);
 
   console.log(
     `${styles.label("tmm")} ${formatCommandValue(commandLabel)} ${styles.muted("•")} ${styles.muted(doc.summary.toLowerCase())}`,
