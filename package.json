@@ -1,5 +1,6 @@
 {
   "name": "tmm",
+  "description": "Fast tmux session management for humans and AI agents.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {

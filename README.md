@@ -24,22 +24,27 @@ bun install
 bun link
 ```
 
-## Command Reference
+## Install Skill (for agents)
 
-### Index
+```bash
+bunx skills add https://github.com/notnotjake/tmm --skill tmm
+```
+
+## Command Reference
 
 | Command | Description |
 | --- | --- |
+| `tmm` | Open session interactively with fuzzy search. |
 | `tmm <session>` | Open a session by name. |
 | `tmm new <session>` | Create a new session. |
-| `tmm ls` | List all session names. |
-| `tmm which` | Show the current session name. |
-| `tmm tail <session>` | Show recent output from a session. |
 | `tmm rename` | Rename a session. |
 | `tmm remove <session>` | Remove a session. |
 | `tmm exit` | Exit the current session. |
+| `tmm tail <session>` | Show recent output from a session. |
 | `tmm run <session> -- <command>` | Run a command inside a session. |
 | `tmm keys <session> <key>` | Send key input to a session. |
+| `tmm ls` | List all session names. |
+| `tmm which` | Show the current session name. |
 | `tmm help` | Show help. |
 
 ### Open and create sessions
@@ -77,58 +82,6 @@ Example:
 
 ```bash
 tmm new worker --background
-```
-
-### Inspect sessions
-
-**List sessions**
-
-Description: Print all tmux session names (non-interactive).
-
-Syntax:
-
-```bash
-tmm ls
-```
-
-Example:
-
-```bash
-tmm ls
-```
-
-**Show current session**
-
-Description: Print the current tmux session name (useful when status bar is hidden).
-
-Syntax:
-
-```bash
-tmm which
-```
-
-Example:
-
-```bash
-tmm which
-```
-
-**Tail session output**
-
-Description: Print recent scrollback from the active pane in a session.
-
-Syntax:
-
-```bash
-tmm tail <session>
-tmm tail <session> -l <lines>
-tmm tail <session> --lines <lines>
-```
-
-Example:
-
-```bash
-tmm tail api --lines 100
 ```
 
 ### Change sessions
@@ -188,6 +141,24 @@ tmm exit --detach
 
 ### Automate/session I/O
 
+**Tail session output**
+
+Description: Print recent scrollback from the active pane in a session.
+
+Syntax:
+
+```bash
+tmm tail <session>
+tmm tail <session> -l <lines>
+tmm tail <session> --lines <lines>
+```
+
+Example:
+
+```bash
+tmm tail api --lines 100
+```
+
 **Run command in a session**
 
 Description: Send a command to the session's active pane and print newly added output.
@@ -221,6 +192,40 @@ Example:
 tmm keys api C-c
 ```
 
+### Inspect sessions
+
+**List sessions**
+
+Description: Print all tmux session names (non-interactive).
+
+Syntax:
+
+```bash
+tmm ls
+```
+
+Example:
+
+```bash
+tmm ls
+```
+
+**Show current session**
+
+Description: Print the current tmux session name (useful when status bar is hidden).
+
+Syntax:
+
+```bash
+tmm which
+```
+
+Example:
+
+```bash
+tmm which
+```
+
 ### Help
 
 **Show help**
@@ -238,10 +243,4 @@ Example:
 
 ```bash
 tmm tail --help
-```
-
-## Install Skill (for agents)
-
-```bash
-bunx skills add https://github.com/notnotjake/tmm --skill tmm
 ```
