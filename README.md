@@ -9,6 +9,12 @@ bun install
 bun link
 ```
 
+## Install Skill
+
+```bash
+bunx skills add https://github.com/notnotjake/tmm --skill tmm
+```
+
 ## Usage
 
 ```
