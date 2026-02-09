@@ -257,17 +257,13 @@ export function resolveHelpTarget(value: string): HelpTarget | null {
 }
 
 export function printMainHelp(): void {
-  console.log(`${styles.title("tmm")} ${styles.muted("tmux session manager")}`);
+  console.log(`${styles.title("tmm")} ${styles.muted("powerfully simple tmux session manager")}`);
   console.log("");
   console.log(styles.heading("Usage:"));
   printCommandRows([
     { value: "tmm", description: "Open a session interactively" },
     { value: "tmm <session>", description: "Open a session by name" },
     { value: "tmm <session> -p", description: "Open session or create if missing" },
-    {
-      value: "tmm <command> [opts]",
-      description: "Run a command",
-    },
   ]);
   console.log("");
   console.log(styles.heading("Commands:"));
