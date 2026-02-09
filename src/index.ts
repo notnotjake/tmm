@@ -87,6 +87,10 @@ async function openSession(sessionName: string): Promise<void> {
   await $`tmux attach -t ${sessionName}`;
 }
 
+async function createSession(sessionName: string): Promise<void> {
+  await $`tmux new-session -d -s ${sessionName}`;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -314,7 +318,7 @@ if (args[0] === "new") {
   }
 
   const sessionName = positionalArgs[0]!;
-  await $`tmux new-session -d -s ${sessionName}`;
+  await createSession(sessionName);
   if (!openInBackground) {
     await openSession(sessionName);
   }
@@ -691,18 +695,46 @@ if (args[0] === "rename") {
 }
 
 if (args[0]) {
-  if (args.length > 1) {
+  let openOrCreate = false;
+  const positionalArgs: string[] = [];
+
+  for (const arg of args) {
+    if (arg === "-p" || arg === "--present") {
+      openOrCreate = true;
+      continue;
+    }
+
+    if (arg.startsWith("-")) {
+      printCommandHelp("open");
+      process.exit(1);
+    }
+
+    positionalArgs.push(arg);
+  }
+
+  if (positionalArgs.length !== 1) {
     printCommandHelp("open");
     process.exit(1);
   }
 
-  const targetSessionName = args[0];
+  const targetSessionName = positionalArgs[0]!;
   const sessions = await getSessions();
   const matched = findSessionByName(sessions, targetSessionName);
 
   if (!matched) {
+    if (openOrCreate) {
+      console.log(`creating and opening tmux session ${targetSessionName}`);
+      await createSession(targetSessionName);
+      await openSession(targetSessionName);
+      process.exit(0);
+    }
+
     console.log(`Session not found: ${targetSessionName}`);
     process.exit(1);
+  }
+
+  if (openOrCreate) {
+    console.log(`opening existing tmux session ${matched.name}`);
   }
 
   await openSession(matched.name);

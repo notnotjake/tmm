@@ -39,6 +39,16 @@ const commandHelp: Record<
         value: "[session]",
         description: "Open by name. Omit to select a session interactively.",
       },
+      {
+        value: "<session> -p",
+        description: "Open by name, or create it if missing.",
+        options: [
+          {
+            value: "-p, --present",
+            description: "If the session does not exist, create it and open it.",
+          },
+        ],
+      },
     ],
   },
   new: {
@@ -253,6 +263,7 @@ export function printMainHelp(): void {
   printCommandRows([
     { value: "tmm", description: "Open a session interactively" },
     { value: "tmm <session>", description: "Open a session by name" },
+    { value: "tmm <session> -p", description: "Open session or create if missing" },
     {
       value: "tmm <command> [opts]",
       description: "Run a command",

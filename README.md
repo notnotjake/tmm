@@ -1,6 +1,6 @@
 # tmm
 
-`tmm` is a fast tmux session manager for humans and AI agents.
+`tmm` is a powerfully simple tmux session manager for humans and AI agents.
 
 It exists to remove friction from everyday tmux work: jumping between sessions, creating new ones, renaming, cleaning up old sessions, and quickly seeing where you are (`tmm which`) when your tmux status bar is hidden.
 
@@ -24,7 +24,7 @@ bun install
 bun link
 ```
 
-## Install Skill (for agents)
+## Install Skill
 
 ```bash
 bunx skills add https://github.com/notnotjake/tmm --skill tmm
@@ -32,20 +32,21 @@ bunx skills add https://github.com/notnotjake/tmm --skill tmm
 
 ## Command Reference
 
-| Command | Description |
-| --- | --- |
-| `tmm` | Open session interactively with fuzzy search. |
-| `tmm <session>` | Open a session by name. |
-| `tmm new <session>` | Create a new session. |
-| `tmm rename` | Rename a session. |
-| `tmm remove <session>` | Remove a session. |
-| `tmm exit` | Exit the current session. |
-| `tmm tail <session>` | Show recent output from a session. |
-| `tmm run <session> -- <command>` | Run a command inside a session. |
-| `tmm keys <session> <key>` | Send key input to a session. |
-| `tmm ls` | List all session names. |
-| `tmm which` | Show the current session name. |
-| `tmm help` | Show help. |
+| Command                          | Description                                   |
+| -------------------------------- | --------------------------------------------- |
+| `tmm`                            | Open session interactively with fuzzy search. |
+| `tmm <session>`                  | Open a session by name.                       |
+| `tmm new <session>`              | Create a new session.                         |
+| `tmm <session> -p`               | Open a session or create it if missing.       |
+| `tmm rename`                     | Rename a session.                             |
+| `tmm remove <session>`           | Remove a session.                             |
+| `tmm exit`                       | Exit the current session.                     |
+| `tmm tail <session>`             | Show recent output from a session.            |
+| `tmm run <session> -- <command>` | Run a command inside a session.               |
+| `tmm keys <session> <key>`       | Send key input to a session.                  |
+| `tmm ls`                         | List all session names.                       |
+| `tmm which`                      | Show the current session name.                |
+| `tmm help`                       | Show help.                                    |
 
 ### Open and create sessions
 
@@ -58,6 +59,8 @@ Syntax:
 ```bash
 tmm
 tmm <session>
+tmm <session> -p
+tmm <session> --present
 ```
 
 Example:
@@ -82,6 +85,16 @@ Example:
 
 ```bash
 tmm new worker --background
+```
+
+**Open or create session**
+
+Description: Open a session if it exists. If it does not exist, create it and then open it.
+
+Example:
+
+```bash
+tmm ai-chat -p
 ```
 
 ### Change sessions
